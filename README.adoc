@@ -152,3 +152,28 @@ $ mvn clean package
 $ mvn spring-boot:run
 ----
 . See the messages sent by Camel.
+
+== Extra Stuff
+
+=== Pull in fuse7-java-openshift imagestream tags that don't exist
+
+[source,bash,options="nowrap",subs="attributes+"]
+----
+oc tag registry.redhat.io/fuse7/fuse-java-openshift:1.8 fuse7-java-openshift:1.8
+oc tag registry.redhat.io/fuse7/fuse-java-openshift:1.6 fuse7-java-openshift:1.6
+----
+
+=== Allow the build to work...!
+
+[source,bash,options="nowrap",subs="attributes+"]
+----
+oc secrets link default pull-secret --for=pull
+oc secrets link builder pull-secret
+----
+
+=== Allow the App to create kubernetes/openshift jobs
+
+[source,bash,options="nowrap",subs="attributes+"]
+----
+oc policy add-role-to-user edit system:serviceaccount:springboot:default -n springboot
+----
