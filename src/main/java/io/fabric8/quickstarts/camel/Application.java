@@ -15,10 +15,21 @@
  */
 package io.fabric8.quickstarts.camel;
 
+import io.fabric8.kubernetes.api.model.Quantity;
+import io.fabric8.openshift.client.DefaultOpenShiftClient;
+import io.fabric8.openshift.client.OpenShiftClient;
+import org.apache.camel.Exchange;
+import org.apache.camel.Processor;
 import org.apache.camel.builder.RouteBuilder;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ImportResource;
+import io.fabric8.kubernetes.api.model.batch.Job;
+import io.fabric8.kubernetes.api.model.batch.JobBuilder;
+
+import java.nio.charset.Charset;
+import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * A spring-boot application that includes a Camel route builder to setup the Camel routes
@@ -34,8 +45,41 @@ public class Application extends RouteBuilder {
 
     @Override
     public void configure() throws Exception {
-        from("timer://foo?period=5000")
+        from("timer://foo?period=60000")
             .setBody().constant("Hello World")
+                .process(new Processor() {
+                    @Override
+                    public void process(Exchange exchange) throws Exception {
+                        OpenShiftClient osClient = new DefaultOpenShiftClient();
+
+                        int randomNumber = ThreadLocalRandom.current().nextInt();
+
+                        String jobName = "job-" + randomNumber;
+
+                        Job aJob = new JobBuilder()
+                                .withNewMetadata().withName(jobName).addToLabels("job-name", jobName).endMetadata()
+                                .withNewSpec()
+                                .withNewTemplate()
+                                .withNewMetadata().addToLabels("job-name", jobName).endMetadata()
+                                .withNewSpec()
+                                .withRestartPolicy("Never")
+                                .addNewContainer().withName(jobName).withImage("registry.access.redhat.com/rhel7/rhel:latest")
+                                .withCommand("/bin/bash", "-c", "for i in {1..5}; do echo hi stuff; sleep 5; done")
+                                .withNewResources()
+                                .addToRequests("cpu", new Quantity("100m"))
+                                .addToRequests("memory", new Quantity("128Mi"))
+                                .addToLimits("cpu", new Quantity("100m"))
+                                .addToLimits("memory", new Quantity("128Mi"))
+                                .endResources()
+                                .endContainer()
+                                .endSpec()
+                                .endTemplate()
+                                .endSpec().build();
+
+                        osClient.batch().jobs().inNamespace("springboot").create(aJob);
+
+                    }
+                })
             .log(">>> ${body}");
     }
 }
